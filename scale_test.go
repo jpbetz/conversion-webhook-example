@@ -7,10 +7,12 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
@@ -35,9 +37,30 @@ func mustNewClient() dynamic.Interface {
 	return client
 }
 
+func mustNewClientset() *kubernetes.Clientset {
+	var kubeconfig string
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig = filepath.Join(home, ".kube", "config")
+	} else {
+		kubeconfig = ""
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err)
+	}
+
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
+	return client
+}
+
 var (
-	fooGvr = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
-	barGvr = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
+	fooGvr       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
+	barGvr       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
+	endpointsGvr = schema.GroupVersionResource{Version: "v1", Resource: "endpoints"}
 )
 
 // BenchmarkCreateWithConvert tests for latency, not throughput.
@@ -61,7 +84,28 @@ func xBenchmarkCreate_Latency(b *testing.B) {
 	}
 }
 
-func BenchmarkCreateWithConvert_Throughput(b *testing.B) {
+// BenchmarkCreateEndpoints_Latency tests for latency, not throughput.
+func BenchmarkCreateEndpoints_Latency(b *testing.B) {
+	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
+	clientset := mustNewClientset()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		createEndpoints(clientset, b)
+	}
+}
+
+// BenchmarkDynamicCreateEndpoints_Latency tests for latency, not throughput.
+func BenchmarkDynamicCreateEndpoints_Latency(b *testing.B) {
+	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
+	client := mustNewClient()
+	endpointsClient := client.Resource(endpointsGvr).Namespace("default")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		dynamicCreateEndpoints(endpointsClient, b)
+	}
+}
+
+func xBenchmarkCreateWithConvert_Throughput(b *testing.B) {
 	client := mustNewClient()
 	foov1Client := client.Resource(fooGvr).Namespace("throughput")
 	b.ResetTimer()
@@ -95,6 +139,23 @@ func xBenchmarkCreate_Throughput(b *testing.B) {
 	}
 	wg.Wait()
 	fmt.Printf("created %d CRs in %v\n", count, time.Now().Sub(start))
+}
+
+func xBenchmarkCreateEndpoints_Throughput(b *testing.B) {
+	clientset := mustNewClientset()
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	count := 100
+	start := time.Now()
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			createEndpoints(clientset, b)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	fmt.Printf("created %d Endpoints in %v\n", count, time.Now().Sub(start))
 }
 
 func xBenchmarkListWithConvert(b *testing.B) {
@@ -161,6 +222,37 @@ func xBenchmarkList(b *testing.B) {
 	}
 }
 
+func xBenchmarkListEndpoints(b *testing.B) {
+	clientset := mustNewClientset()
+	listSize := 10000
+	l, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{ResourceVersion: "0"})
+	if err != nil {
+		b.Fatalf("failed to check list size: %v", err)
+	}
+	if len(l.Items) < listSize {
+		var wg sync.WaitGroup
+		remaining := listSize - len(l.Items)
+		wg.Add(remaining)
+		for i := 0; i < remaining; i++ {
+			go func() {
+				createEndpoints(clientset, b)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+	} else if len(l.Items) > listSize {
+		b.Fatalf("Too many items already exist. Want %d got %d", listSize, len(l.Items))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{})
+		if err != nil {
+			b.Fatalf("failed to list: %v", err)
+		}
+	}
+}
+
 func createFoo(foov1Client dynamic.ResourceInterface, b *testing.B) {
 	foo := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -185,4 +277,26 @@ func createBar(barv1Client dynamic.ResourceInterface, b *testing.B) {
 		},
 	}
 	barv1Client.Create(bar, metav1.CreateOptions{})
+}
+
+func createEndpoints(clientset *kubernetes.Clientset, b *testing.B) {
+	endpoints := &v1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("endpoints-%d", time.Now().Nanosecond()),
+		},
+	}
+	clientset.CoreV1().Endpoints("default").Create(endpoints)
+}
+
+func dynamicCreateEndpoints(client dynamic.ResourceInterface, b *testing.B) {
+	endpoints := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Endpoints",
+			"metadata": map[string]interface{}{
+				"name": fmt.Sprintf("endpoints-%d", time.Now().Nanosecond()),
+			},
+		},
+	}
+	client.Create(endpoints, metav1.CreateOptions{})
 }
