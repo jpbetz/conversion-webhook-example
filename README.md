@@ -36,7 +36,7 @@ kubectl create -f foov2.yaml
 
 ```sh
 kubectl get foo foov1
-# TODO: How to read v1?
+kubectl get foo.v1.stable.example.com foov1
 ```
 
 ## References
