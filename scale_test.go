@@ -61,22 +61,43 @@ func xBenchmarkCreate_Latency(b *testing.B) {
 	}
 }
 
-func xBenchmarkCreateWithConvert_Throughput(b *testing.B) {
+func BenchmarkCreateWithConvert_Throughput(b *testing.B) {
 	client := mustNewClient()
-	foov1Client := client.Resource(fooGvr).Namespace("default")
+	foov1Client := client.Resource(fooGvr).Namespace("throughput")
 	b.ResetTimer()
 	var wg sync.WaitGroup
-	wg.Add(b.N)
-	for i := 0; i < b.N; i++ {
+	count := 100
+	start := time.Now()
+	wg.Add(count)
+	for i := 0; i < count; i++ {
 		go func() {
 			createFoo(foov1Client, b)
 			wg.Done()
 		}()
 	}
 	wg.Wait()
+	fmt.Printf("created %d CRs in %v\n", count, time.Now().Sub(start))
 }
 
-func BenchmarkListWithConvert(b *testing.B) {
+func xBenchmarkCreate_Throughput(b *testing.B) {
+	client := mustNewClient()
+	barv1Client := client.Resource(barGvr).Namespace("throughput")
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	count := 100
+	start := time.Now()
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			createBar(barv1Client, b)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	fmt.Printf("created %d CRs in %v\n", count, time.Now().Sub(start))
+}
+
+func xBenchmarkListWithConvert(b *testing.B) {
 	client := mustNewClient()
 	foov1Client := client.Resource(fooGvr).Namespace("default")
 	listSize := 10000
@@ -108,7 +129,7 @@ func BenchmarkListWithConvert(b *testing.B) {
 	}
 }
 
-func BenchmarkList(b *testing.B) {
+func xBenchmarkList(b *testing.B) {
 	client := mustNewClient()
 	barv1Client := client.Resource(barGvr).Namespace("default")
 	listSize := 10000
