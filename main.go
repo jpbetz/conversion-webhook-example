@@ -32,13 +32,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = createv1(client)
+	err = testCreateWithConvertLatency(client)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func createv1(client dynamic.Interface) error {
+func testCreateWithConvertLatency(client dynamic.Interface) error {
+	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
 	fooGvr := schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
 	foov1Client := client.Resource(fooGvr).Namespace("default")
 	count := 100
