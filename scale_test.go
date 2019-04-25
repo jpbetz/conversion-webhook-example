@@ -35,79 +35,62 @@ func mustNewClient() dynamic.Interface {
 	return client
 }
 
+var (
+	fooGvr = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
+	barGvr = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
+)
+
 // BenchmarkCreateWithConvert tests for latency, not throughput.
-func xBenchmarkCreateWithConvert(b *testing.B) {
+func xBenchmarkCreateWithConvert_Latency(b *testing.B) {
 	client := mustNewClient()
-	fooGvr := schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
 	foov1Client := client.Resource(fooGvr).Namespace("default")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		foo := &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "stable.example.com/v1",
-				"kind":       "Foo",
-				"metadata": map[string]interface{}{
-					"name": fmt.Sprintf("foov1-%d", time.Now().Nanosecond()),
-				},
-			},
-		}
-		_, err := foov1Client.Create(foo, metav1.CreateOptions{})
-		if err != nil {
-			b.Fatalf("failed to create foo: %v", err)
-		}
+		createFoo(foov1Client, b)
 	}
 }
 
 // BenchmarkCreate tests for latency, not throughput.
-func xBenchmarkCreate(b *testing.B) {
+func xBenchmarkCreate_Latency(b *testing.B) {
 	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
 	client := mustNewClient()
-	barGvr := schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
 	barv1Client := client.Resource(barGvr).Namespace("default")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bar := &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "stable.example.com/v1",
-				"kind":       "Bar",
-				"metadata": map[string]interface{}{
-					"name": fmt.Sprintf("barv1-%d", time.Now().Nanosecond()),
-				},
-			},
-		}
-		_, err := barv1Client.Create(bar, metav1.CreateOptions{})
-		if err != nil {
-			b.Fatalf("failed to create bar: %v", err)
-		}
+		createBar(barv1Client, b)
 	}
+}
+
+func xBenchmarkCreateWithConvert_Throughput(b *testing.B) {
+	client := mustNewClient()
+	foov1Client := client.Resource(fooGvr).Namespace("default")
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	wg.Add(b.N)
+	for i := 0; i < b.N; i++ {
+		go func() {
+			createFoo(foov1Client, b)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 func BenchmarkListWithConvert(b *testing.B) {
 	client := mustNewClient()
-	fooGvr := schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
 	foov1Client := client.Resource(fooGvr).Namespace("default")
-
 	listSize := 10000
-
-	l, err := foov1Client.List(metav1.ListOptions{})
+	l, err := foov1Client.List(metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
 	if len(l.Items) < listSize {
 		var wg sync.WaitGroup
-		wg.Add(listSize - len(l.Items))
-		for i := len(l.Items); i < listSize; i++ {
+		remaining := listSize - len(l.Items)
+		wg.Add(remaining)
+		for i := 0; i < remaining; i++ {
 			go func() {
-				foo := &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"apiVersion": "stable.example.com/v1",
-						"kind":       "Foo",
-						"metadata": map[string]interface{}{
-							"name": fmt.Sprintf("foov1-%d", time.Now().Nanosecond()),
-						},
-					},
-				}
-				foov1Client.Create(foo, metav1.CreateOptions{})
+				createFoo(foov1Client, b)
 				wg.Done()
 			}()
 		}
@@ -127,29 +110,19 @@ func BenchmarkListWithConvert(b *testing.B) {
 
 func BenchmarkList(b *testing.B) {
 	client := mustNewClient()
-	barGvr := schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
 	barv1Client := client.Resource(barGvr).Namespace("default")
-
 	listSize := 10000
-	l, err := barv1Client.List(metav1.ListOptions{})
+	l, err := barv1Client.List(metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
 	if len(l.Items) < listSize {
 		var wg sync.WaitGroup
-		wg.Add(listSize - len(l.Items))
-		for i := len(l.Items); i < listSize; i++ {
+		remaining := listSize - len(l.Items)
+		wg.Add(remaining)
+		for i := 0; i < remaining; i++ {
 			go func() {
-				bar := &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"apiVersion": "stable.example.com/v1",
-						"kind":       "Bar",
-						"metadata": map[string]interface{}{
-							"name": fmt.Sprintf("barv1-%d", time.Now().Nanosecond()),
-						},
-					},
-				}
-				barv1Client.Create(bar, metav1.CreateOptions{})
+				createBar(barv1Client, b)
 				wg.Done()
 			}()
 		}
@@ -165,4 +138,30 @@ func BenchmarkList(b *testing.B) {
 			b.Fatalf("failed to list: %v", err)
 		}
 	}
+}
+
+func createFoo(foov1Client dynamic.ResourceInterface, b *testing.B) {
+	foo := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "stable.example.com/v1",
+			"kind":       "Foo",
+			"metadata": map[string]interface{}{
+				"name": fmt.Sprintf("foov1-%d", time.Now().Nanosecond()),
+			},
+		},
+	}
+	foov1Client.Create(foo, metav1.CreateOptions{})
+}
+
+func createBar(barv1Client dynamic.ResourceInterface, b *testing.B) {
+	bar := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "stable.example.com/v1",
+			"kind":       "Bar",
+			"metadata": map[string]interface{}{
+				"name": fmt.Sprintf("barv1-%d", time.Now().Nanosecond()),
+			},
+		},
+	}
+	barv1Client.Create(bar, metav1.CreateOptions{})
 }
