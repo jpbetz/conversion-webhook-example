@@ -166,7 +166,7 @@ func xBenchmarkListWithConvert(b *testing.B) {
 	client := mustNewClient()
 	foov1Client := client.Resource(fooGvr).Namespace("default")
 	listSize := 10000
-	l, err := foov1Client.List(metav1.ListOptions{ResourceVersion: "0"})
+	l, err := foov1Client.List(metav1.ListOptions{})
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
@@ -198,7 +198,7 @@ func xBenchmarkList(b *testing.B) {
 	client := mustNewClient()
 	barv1Client := client.Resource(barGvr).Namespace("default")
 	listSize := 10000
-	l, err := barv1Client.List(metav1.ListOptions{ResourceVersion: "0"})
+	l, err := barv1Client.List(metav1.ListOptions{})
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
@@ -229,7 +229,7 @@ func xBenchmarkList(b *testing.B) {
 func xBenchmarkListEndpoints(b *testing.B) {
 	clientset := mustNewClientset()
 	listSize := 10000
-	l, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{ResourceVersion: "0"})
+	l, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{})
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
@@ -261,7 +261,7 @@ func BenchmarkDynamicListEndpoints(b *testing.B) {
 	client := mustNewClient()
 	endpointsClient := client.Resource(endpointsGvr).Namespace("default")
 	listSize := 10000
-	l, err := endpointsClient.List(metav1.ListOptions{ResourceVersion: "0"})
+	l, err := endpointsClient.List(metav1.ListOptions{})
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
