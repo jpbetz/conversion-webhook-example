@@ -30,6 +30,8 @@ func mustNewClient() dynamic.Interface {
 		panic(err)
 	}
 
+	config.QPS = 1000.0
+	config.Burst = 2000
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
 		panic(err)
@@ -50,6 +52,8 @@ func mustNewClientset() *kubernetes.Clientset {
 		panic(err)
 	}
 
+	config.QPS = 1000.0
+	config.Burst = 2000
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err)
