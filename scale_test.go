@@ -89,7 +89,7 @@ func xBenchmarkCreate_Latency(b *testing.B) {
 }
 
 // BenchmarkCreateEndpoints_Latency tests for latency, not throughput.
-func BenchmarkCreateEndpoints_Latency(b *testing.B) {
+func xBenchmarkCreateEndpoints_Latency(b *testing.B) {
 	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
 	clientset := mustNewClientset()
 	b.ResetTimer()
@@ -99,7 +99,7 @@ func BenchmarkCreateEndpoints_Latency(b *testing.B) {
 }
 
 // BenchmarkDynamicCreateEndpoints_Latency tests for latency, not throughput.
-func BenchmarkDynamicCreateEndpoints_Latency(b *testing.B) {
+func xBenchmarkDynamicCreateEndpoints_Latency(b *testing.B) {
 	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
 	client := mustNewClient()
 	endpointsClient := client.Resource(endpointsGvr).Namespace("default")
@@ -251,6 +251,38 @@ func xBenchmarkListEndpoints(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{})
+		if err != nil {
+			b.Fatalf("failed to list: %v", err)
+		}
+	}
+}
+
+func BenchmarkDynamicListEndpoints(b *testing.B) {
+	client := mustNewClient()
+	endpointsClient := client.Resource(endpointsGvr).Namespace("default")
+	listSize := 10000
+	l, err := endpointsClient.List(metav1.ListOptions{ResourceVersion: "0"})
+	if err != nil {
+		b.Fatalf("failed to check list size: %v", err)
+	}
+	if len(l.Items) < listSize {
+		var wg sync.WaitGroup
+		remaining := listSize - len(l.Items)
+		wg.Add(remaining)
+		for i := 0; i < remaining; i++ {
+			go func() {
+				dynamicCreateEndpoints(endpointsClient, b)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+	} else if len(l.Items) > listSize {
+		b.Fatalf("Too many items already exist. Want %d got %d", listSize, len(l.Items))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := endpointsClient.List(metav1.ListOptions{})
 		if err != nil {
 			b.Fatalf("failed to list: %v", err)
 		}
