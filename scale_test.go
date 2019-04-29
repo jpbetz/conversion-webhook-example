@@ -19,6 +19,11 @@ var (
 
 	// TODO: make sure namespace exists in setup / test
 	testNamespace = "benchmark"
+
+	// size in kB
+	largeDataSize = 10
+	dummyFields   = []string{"spec", "dummy"}
+	metaFields    = []string{"metadata", "annotations"}
 )
 
 var foov1Template = []byte(`apiVersion: stable.example.com/v1
@@ -63,6 +68,42 @@ func BenchmarkCreateLatencyEndpointsTyped(b *testing.B) {
 
 func BenchmarkCreateLatencyEndpointsDynamic(b *testing.B) {
 	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func BenchmarkCreateLatencyCRWithConvert_LargeData(b *testing.B) {
+	template := mustIncreaseObjectSize(foov1Template, largeDataSize, dummyFields...)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, template, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func BenchmarkCreateLatencyCRWithConvert_LargeMetaData(b *testing.B) {
+	template := mustIncreaseObjectSize(foov1Template, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, template, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func BenchmarkCreateLatencyCR_LargeData(b *testing.B) {
+	template := mustIncreaseObjectSize(barTemplate, largeDataSize, dummyFields...)
+	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, template, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func BenchmarkCreateLatencyCR_LargeMetaData(b *testing.B) {
+	template := mustIncreaseObjectSize(barTemplate, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, template, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func BenchmarkCreateLatencyEndpointsTyped_LargeMetaData(b *testing.B) {
+	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
+	c := mustNewEndpointsBenchmarkClient(testNamespace, template, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func BenchmarkCreateLatencyEndpointsDynamic_LargeMetaData(b *testing.B) {
+	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 

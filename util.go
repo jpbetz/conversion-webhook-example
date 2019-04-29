@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -116,8 +117,7 @@ func (c *endpointsBenchmarkClient) Count() (int, error) {
 func mustNewDynamicBenchmarkClient(gvr schema.GroupVersionResource, namespace string,
 	templateData []byte, listOptions *metav1.ListOptions) BenchmarkClient {
 	template := unstructured.Unstructured{}
-	err := yaml.Unmarshal(templateData, &template)
-	if err != nil {
+	if err := yaml.Unmarshal(templateData, &template); err != nil {
 		panic(err)
 	}
 	return &dynamicBenchmarkClient{
@@ -130,8 +130,7 @@ func mustNewDynamicBenchmarkClient(gvr schema.GroupVersionResource, namespace st
 func mustNewEndpointsBenchmarkClient(namespace string, templateData []byte,
 	listOptions *metav1.ListOptions) BenchmarkClient {
 	template := v1.Endpoints{}
-	err := yaml.Unmarshal(templateData, &template)
-	if err != nil {
+	if err := yaml.Unmarshal(templateData, &template); err != nil {
 		panic(err)
 	}
 	return &endpointsBenchmarkClient{
@@ -139,4 +138,27 @@ func mustNewEndpointsBenchmarkClient(namespace string, templateData []byte,
 		template:    &template,
 		listOptions: listOptions,
 	}
+}
+
+// mustIncreaseObjectSize bumps data by kB size
+func mustIncreaseObjectSize(data []byte, size int, fields ...string) []byte {
+	u := unstructured.Unstructured{}
+	if err := yaml.Unmarshal(data, &u); err != nil {
+		panic(err)
+	}
+	dummy := map[string]string{}
+	for i := 0; i < size; i++ {
+		// TODO: double check wired format size
+		// 1000 bytes each in JSON (10+6+984=1000)
+		//     ,"<10 bytes>":"<984 bytes>"
+		dummy[fmt.Sprintf("%010d", i)] = strings.Repeat("x", 984)
+	}
+	if err := unstructured.SetNestedStringMap(u.Object, dummy, fields...); err != nil {
+		panic(err)
+	}
+	d, err := yaml.Marshal(&u)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
