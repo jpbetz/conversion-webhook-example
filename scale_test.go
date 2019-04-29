@@ -18,12 +18,19 @@ var (
 	endpointsGVR = schema.GroupVersionResource{Version: "v1", Resource: "endpoints"}
 
 	// TODO: make sure namespace exists in setup / test
-	testNamespace = "benchmark"
+	emptyNamespace         = "empty"
+	largeDataNamespace     = "large-data"
+	largeMetadataNamespace = "large-metadata"
 
 	// size in kB
 	largeDataSize = 10
 	dummyFields   = []string{"spec", "dummy"}
 	metaFields    = []string{"metadata", "annotations"}
+
+	// number of objects we will create and list in list benchmarks
+	emptyListSize         = 10000
+	largeDataListSize     = 500
+	largeMetadataListSize = 500
 )
 
 var foov1Template = []byte(`apiVersion: stable.example.com/v1
@@ -52,58 +59,58 @@ func benchmarkCreateLatency(b *testing.B, client BenchmarkClient) {
 }
 
 func BenchmarkCreateLatencyCRWithConvert(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(foov1GVR, emptyNamespace, foov1Template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
 func BenchmarkCreateLatencyCR(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(barGVR, emptyNamespace, barTemplate, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
 func BenchmarkCreateLatencyEndpointsTyped(b *testing.B) {
-	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	c := mustNewEndpointsBenchmarkClient(emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
 func BenchmarkCreateLatencyEndpointsDynamic(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
 func BenchmarkCreateLatencyCRWithConvert_LargeData(b *testing.B) {
 	template := mustIncreaseObjectSize(foov1Template, largeDataSize, dummyFields...)
-	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(foov1GVR, largeDataNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
-func BenchmarkCreateLatencyCRWithConvert_LargeMetaData(b *testing.B) {
+func BenchmarkCreateLatencyCRWithConvert_LargeMetadata(b *testing.B) {
 	template := mustIncreaseObjectSize(foov1Template, largeDataSize, metaFields...)
-	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(foov1GVR, largeMetadataNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
 func BenchmarkCreateLatencyCR_LargeData(b *testing.B) {
 	template := mustIncreaseObjectSize(barTemplate, largeDataSize, dummyFields...)
-	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(barGVR, largeDataNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
-func BenchmarkCreateLatencyCR_LargeMetaData(b *testing.B) {
+func BenchmarkCreateLatencyCR_LargeMetadata(b *testing.B) {
 	template := mustIncreaseObjectSize(barTemplate, largeDataSize, metaFields...)
-	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(barGVR, largeMetadataNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
-func BenchmarkCreateLatencyEndpointsTyped_LargeMetaData(b *testing.B) {
+func BenchmarkCreateLatencyEndpointsTyped_LargeMetadata(b *testing.B) {
 	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
-	c := mustNewEndpointsBenchmarkClient(testNamespace, template, &metav1.ListOptions{})
+	c := mustNewEndpointsBenchmarkClient(largeMetadataNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
-func BenchmarkCreateLatencyEndpointsDynamic_LargeMetaData(b *testing.B) {
+func BenchmarkCreateLatencyEndpointsDynamic_LargeMetadata(b *testing.B) {
 	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
-	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, largeMetadataNamespace, template, &metav1.ListOptions{})
 	benchmarkCreateLatency(b, c)
 }
 
@@ -119,7 +126,9 @@ func benchmarkCreateThroughput(b *testing.B, client BenchmarkClient) {
 		go func() {
 			_, err := client.Create(idx)
 			if err != nil {
-				b.Fatalf("failed to create object: %v", err)
+				// TODO: b.Fatal doesn't raise
+				// b.Fatalf("failed to create object: %v", err)
+				panic(err)
 			}
 			wg.Done()
 		}()
@@ -129,27 +138,26 @@ func benchmarkCreateThroughput(b *testing.B, client BenchmarkClient) {
 }
 
 func BenchmarkCreateThroughputCRWithConvert(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(foov1GVR, emptyNamespace, foov1Template, &metav1.ListOptions{})
 	benchmarkCreateThroughput(b, c)
 }
 
 func BenchmarkCreateThroughputCR(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(barGVR, emptyNamespace, barTemplate, &metav1.ListOptions{})
 	benchmarkCreateThroughput(b, c)
 }
 
 func BenchmarkCreateThroughputEndpointsTyped(b *testing.B) {
-	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	c := mustNewEndpointsBenchmarkClient(emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
 	benchmarkCreateThroughput(b, c)
 }
 
 func BenchmarkCreateThroughputEndpointsDynamic(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
 	benchmarkCreateThroughput(b, c)
 }
 
-func benchmarkList(b *testing.B, client BenchmarkClient) {
-	listSize := 10000
+func benchmarkList(b *testing.B, client BenchmarkClient, listSize int) {
 	num, err := client.Count()
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
@@ -164,7 +172,9 @@ func benchmarkList(b *testing.B, client BenchmarkClient) {
 			go func() {
 				_, err := client.Create(idx)
 				if err != nil {
-					b.Fatalf("failed to create object: %v", err)
+					// TODO: b.Fatal doesn't raise
+					// b.Fatalf("failed to create object: %v", err)
+					panic(err)
 				}
 				wg.Done()
 			}()
@@ -184,41 +194,113 @@ func benchmarkList(b *testing.B, client BenchmarkClient) {
 }
 
 func BenchmarkListCRWithConvert(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{})
-	benchmarkList(b, c)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, emptyNamespace, foov1Template, &metav1.ListOptions{})
+	benchmarkList(b, c, emptyListSize)
 }
 
 func BenchmarkListCR(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{})
-	benchmarkList(b, c)
+	c := mustNewDynamicBenchmarkClient(barGVR, emptyNamespace, barTemplate, &metav1.ListOptions{})
+	benchmarkList(b, c, emptyListSize)
 }
 
 func BenchmarkListEndpointsTyped(b *testing.B) {
-	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{})
-	benchmarkList(b, c)
+	c := mustNewEndpointsBenchmarkClient(emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkList(b, c, emptyListSize)
 }
 
 func BenchmarkListEndpointsDynamic(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
-	benchmarkList(b, c)
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkList(b, c, emptyListSize)
+}
+
+func BenchmarkListCRWithConvert_LargeData(b *testing.B) {
+	template := mustIncreaseObjectSize(foov1Template, largeDataSize, dummyFields...)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, largeDataNamespace, template, &metav1.ListOptions{})
+	benchmarkList(b, c, largeDataListSize)
+}
+
+func BenchmarkListCRWithConvert_LargeMetadata(b *testing.B) {
+	template := mustIncreaseObjectSize(foov1Template, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, largeMetadataNamespace, template, &metav1.ListOptions{})
+	benchmarkList(b, c, largeMetadataListSize)
+}
+
+func BenchmarkListCR_LargeData(b *testing.B) {
+	template := mustIncreaseObjectSize(barTemplate, largeDataSize, dummyFields...)
+	c := mustNewDynamicBenchmarkClient(barGVR, largeDataNamespace, template, &metav1.ListOptions{})
+	benchmarkList(b, c, largeDataListSize)
+}
+
+func BenchmarkListCR_LargeMetadata(b *testing.B) {
+	template := mustIncreaseObjectSize(barTemplate, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(barGVR, largeMetadataNamespace, template, &metav1.ListOptions{})
+	benchmarkList(b, c, largeMetadataListSize)
+}
+
+func BenchmarkListEndpointsTyped_LargeMetadata(b *testing.B) {
+	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
+	c := mustNewEndpointsBenchmarkClient(largeMetadataNamespace, template, &metav1.ListOptions{})
+	benchmarkList(b, c, largeMetadataListSize)
+}
+
+func BenchmarkListEndpointsDynamic_LargeMetadata(b *testing.B) {
+	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, largeMetadataNamespace, template, &metav1.ListOptions{})
+	benchmarkList(b, c, largeMetadataListSize)
 }
 
 func BenchmarkListCRWithConvert_WatchCache(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{ResourceVersion: "0"})
-	benchmarkList(b, c)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, emptyNamespace, foov1Template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, emptyListSize)
 }
 
 func BenchmarkListCR_WatchCache(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{ResourceVersion: "0"})
-	benchmarkList(b, c)
+	c := mustNewDynamicBenchmarkClient(barGVR, emptyNamespace, barTemplate, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, emptyListSize)
 }
 
 func BenchmarkListEndpointsTyped_WatchCache(b *testing.B) {
-	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{ResourceVersion: "0"})
-	benchmarkList(b, c)
+	c := mustNewEndpointsBenchmarkClient(emptyNamespace, endpointsTemplate, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, emptyListSize)
 }
 
 func BenchmarkListEndpointsDynamic_WatchCache(b *testing.B) {
-	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{ResourceVersion: "0"})
-	benchmarkList(b, c)
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, emptyNamespace, endpointsTemplate, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, emptyListSize)
+}
+
+func BenchmarkListCRWithConvert_LargeData_WatchCache(b *testing.B) {
+	template := mustIncreaseObjectSize(foov1Template, largeDataSize, dummyFields...)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, largeDataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, largeDataListSize)
+}
+
+func BenchmarkListCRWithConvert_LargeMetadata_WatchCache(b *testing.B) {
+	template := mustIncreaseObjectSize(foov1Template, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(foov1GVR, largeMetadataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, largeMetadataListSize)
+}
+
+func BenchmarkListCR_LargeData_WatchCache(b *testing.B) {
+	template := mustIncreaseObjectSize(barTemplate, largeDataSize, dummyFields...)
+	c := mustNewDynamicBenchmarkClient(barGVR, largeDataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, largeDataListSize)
+}
+
+func BenchmarkListCR_LargeMetadata_WatchCache(b *testing.B) {
+	template := mustIncreaseObjectSize(barTemplate, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(barGVR, largeMetadataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, largeMetadataListSize)
+}
+
+func BenchmarkListEndpointsTyped_LargeMetadata_WatchCache(b *testing.B) {
+	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
+	c := mustNewEndpointsBenchmarkClient(largeMetadataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, largeMetadataListSize)
+}
+
+func BenchmarkListEndpointsDynamic_LargeMetadata_WatchCache(b *testing.B) {
+	template := mustIncreaseObjectSize(endpointsTemplate, largeDataSize, metaFields...)
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, largeMetadataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c, largeMetadataListSize)
 }
