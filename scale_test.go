@@ -2,337 +2,182 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 )
-
-func mustNewClient() dynamic.Interface {
-	var kubeconfig string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = filepath.Join(home, ".kube", "config")
-	} else {
-		kubeconfig = ""
-	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-
-	config.QPS = 1000.0
-	config.Burst = 2000
-	client, err := dynamic.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
-	return client
-}
-
-func mustNewClientset() *kubernetes.Clientset {
-	var kubeconfig string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = filepath.Join(home, ".kube", "config")
-	} else {
-		kubeconfig = ""
-	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-
-	config.QPS = 1000.0
-	config.Burst = 2000
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
-	return client
-}
 
 var (
-	fooGvr       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
-	barGvr       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
-	endpointsGvr = schema.GroupVersionResource{Version: "v1", Resource: "endpoints"}
+	// GVR used for building dynamic client
+	foov1GVR     = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
+	foov2GVR     = schema.GroupVersionResource{Group: "stable.example.com", Version: "v2", Resource: "foos"}
+	barGVR       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
+	endpointsGVR = schema.GroupVersionResource{Version: "v1", Resource: "endpoints"}
+
+	// TODO: make sure namespace exists in setup / test
+	testNamespace = "benchmark"
 )
 
-// BenchmarkCreateWithConvert tests for latency, not throughput.
-func xBenchmarkCreateWithConvert_Latency(b *testing.B) {
-	client := mustNewClient()
-	foov1Client := client.Resource(fooGvr).Namespace("default")
+var foov1Template = []byte(`apiVersion: stable.example.com/v1
+kind: Foo
+metadata:
+  name: template`)
+
+var barTemplate = []byte(`apiVersion: stable.example.com/v1
+kind: Bar
+metadata:
+  name: template`)
+
+var endpointsTemplate = []byte(`apiVersion: v1
+kind: Endpoints
+metadata:
+  name: template`)
+
+func benchmarkCreateLatency(b *testing.B, client BenchmarkClient) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		createFoo(foov1Client, b)
+		_, err := client.Create(0)
+		if err != nil {
+			b.Fatalf("failed to create object: %v", err)
+		}
 	}
 }
 
-// BenchmarkCreate tests for latency, not throughput.
-func xBenchmarkCreate_Latency(b *testing.B) {
-	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
-	client := mustNewClient()
-	barv1Client := client.Resource(barGvr).Namespace("default")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		createBar(barv1Client, b)
-	}
+func BenchmarkCreateLatencyCRWithConvert(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
 }
 
-// BenchmarkCreateEndpoints_Latency tests for latency, not throughput.
-func xBenchmarkCreateEndpoints_Latency(b *testing.B) {
-	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
-	clientset := mustNewClientset()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		createEndpoints(clientset, b)
-	}
+func BenchmarkCreateLatencyCR(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
 }
 
-// BenchmarkDynamicCreateEndpoints_Latency tests for latency, not throughput.
-func xBenchmarkDynamicCreateEndpoints_Latency(b *testing.B) {
-	// TODO: parallelize create requests, this is doing everything in series and measures only latency usefully.
-	client := mustNewClient()
-	endpointsClient := client.Resource(endpointsGvr).Namespace("default")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		dynamicCreateEndpoints(endpointsClient, b)
-	}
+func BenchmarkCreateLatencyEndpointsTyped(b *testing.B) {
+	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
 }
 
-func xBenchmarkCreateWithConvert_Throughput(b *testing.B) {
-	client := mustNewClient()
-	foov1Client := client.Resource(fooGvr).Namespace("throughput")
+func BenchmarkCreateLatencyEndpointsDynamic(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkCreateLatency(b, c)
+}
+
+func benchmarkCreateThroughput(b *testing.B, client BenchmarkClient) {
 	b.ResetTimer()
 	var wg sync.WaitGroup
 	count := 100
 	start := time.Now()
 	wg.Add(count)
 	for i := 0; i < count; i++ {
+		// deep copy i
+		idx := i
 		go func() {
-			createFoo(foov1Client, b)
+			_, err := client.Create(idx)
+			if err != nil {
+				b.Fatalf("failed to create object: %v", err)
+			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
-	fmt.Printf("created %d CRs in %v\n", count, time.Now().Sub(start))
+	fmt.Printf("created %d objects in %v\n", count, time.Now().Sub(start))
 }
 
-func xBenchmarkCreate_Throughput(b *testing.B) {
-	client := mustNewClient()
-	barv1Client := client.Resource(barGvr).Namespace("throughput")
-	b.ResetTimer()
-	var wg sync.WaitGroup
-	count := 100
-	start := time.Now()
-	wg.Add(count)
-	for i := 0; i < count; i++ {
-		go func() {
-			createBar(barv1Client, b)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	fmt.Printf("created %d CRs in %v\n", count, time.Now().Sub(start))
+func BenchmarkCreateThroughputCRWithConvert(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{})
+	benchmarkCreateThroughput(b, c)
 }
 
-func xBenchmarkCreateEndpoints_Throughput(b *testing.B) {
-	clientset := mustNewClientset()
-	b.ResetTimer()
-	var wg sync.WaitGroup
-	count := 100
-	start := time.Now()
-	wg.Add(count)
-	for i := 0; i < count; i++ {
-		go func() {
-			createEndpoints(clientset, b)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	fmt.Printf("created %d Endpoints in %v\n", count, time.Now().Sub(start))
+func BenchmarkCreateThroughputCR(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{})
+	benchmarkCreateThroughput(b, c)
 }
 
-func xBenchmarkListWithConvert(b *testing.B) {
-	client := mustNewClient()
-	foov1Client := client.Resource(fooGvr).Namespace("default")
+func BenchmarkCreateThroughputEndpointsTyped(b *testing.B) {
+	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkCreateThroughput(b, c)
+}
+
+func BenchmarkCreateThroughputEndpointsDynamic(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkCreateThroughput(b, c)
+}
+
+func benchmarkList(b *testing.B, client BenchmarkClient) {
 	listSize := 10000
-	l, err := foov1Client.List(metav1.ListOptions{})
+	num, err := client.Count()
 	if err != nil {
 		b.Fatalf("failed to check list size: %v", err)
 	}
-	if len(l.Items) < listSize {
+	if num < listSize {
 		var wg sync.WaitGroup
-		remaining := listSize - len(l.Items)
+		remaining := listSize - num
 		wg.Add(remaining)
 		for i := 0; i < remaining; i++ {
+			// deep copy i
+			idx := i
 			go func() {
-				createFoo(foov1Client, b)
+				_, err := client.Create(idx)
+				if err != nil {
+					b.Fatalf("failed to create object: %v", err)
+				}
 				wg.Done()
 			}()
 		}
 		wg.Wait()
-	} else if len(l.Items) > listSize {
-		b.Fatalf("Too many items already exist. Want %d got %d", listSize, len(l.Items))
+	} else if num > listSize {
+		b.Fatalf("Too many items already exist. Want %d got %d", listSize, num)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := foov1Client.List(metav1.ListOptions{})
+		_, err := client.List()
 		if err != nil {
 			b.Fatalf("failed to list: %v", err)
 		}
 	}
 }
 
-func xBenchmarkList(b *testing.B) {
-	client := mustNewClient()
-	barv1Client := client.Resource(barGvr).Namespace("default")
-	listSize := 10000
-	l, err := barv1Client.List(metav1.ListOptions{})
-	if err != nil {
-		b.Fatalf("failed to check list size: %v", err)
-	}
-	if len(l.Items) < listSize {
-		var wg sync.WaitGroup
-		remaining := listSize - len(l.Items)
-		wg.Add(remaining)
-		for i := 0; i < remaining; i++ {
-			go func() {
-				createBar(barv1Client, b)
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-	} else if len(l.Items) > listSize {
-		b.Fatalf("Too many items already exist. Want %d got %d", listSize, len(l.Items))
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := barv1Client.List(metav1.ListOptions{})
-		if err != nil {
-			b.Fatalf("failed to list: %v", err)
-		}
-	}
+func BenchmarkListCRWithConvert(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{})
+	benchmarkList(b, c)
 }
 
-func xBenchmarkListEndpoints(b *testing.B) {
-	clientset := mustNewClientset()
-	listSize := 10000
-	l, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{})
-	if err != nil {
-		b.Fatalf("failed to check list size: %v", err)
-	}
-	if len(l.Items) < listSize {
-		var wg sync.WaitGroup
-		remaining := listSize - len(l.Items)
-		wg.Add(remaining)
-		for i := 0; i < remaining; i++ {
-			go func() {
-				createEndpoints(clientset, b)
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-	} else if len(l.Items) > listSize {
-		b.Fatalf("Too many items already exist. Want %d got %d", listSize, len(l.Items))
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := clientset.CoreV1().Endpoints("default").List(metav1.ListOptions{})
-		if err != nil {
-			b.Fatalf("failed to list: %v", err)
-		}
-	}
+func BenchmarkListCR(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{})
+	benchmarkList(b, c)
 }
 
-func BenchmarkDynamicListEndpoints(b *testing.B) {
-	client := mustNewClient()
-	endpointsClient := client.Resource(endpointsGvr).Namespace("default")
-	listSize := 10000
-	l, err := endpointsClient.List(metav1.ListOptions{})
-	if err != nil {
-		b.Fatalf("failed to check list size: %v", err)
-	}
-	if len(l.Items) < listSize {
-		var wg sync.WaitGroup
-		remaining := listSize - len(l.Items)
-		wg.Add(remaining)
-		for i := 0; i < remaining; i++ {
-			go func() {
-				dynamicCreateEndpoints(endpointsClient, b)
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-	} else if len(l.Items) > listSize {
-		b.Fatalf("Too many items already exist. Want %d got %d", listSize, len(l.Items))
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := endpointsClient.List(metav1.ListOptions{})
-		if err != nil {
-			b.Fatalf("failed to list: %v", err)
-		}
-	}
+func BenchmarkListEndpointsTyped(b *testing.B) {
+	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkList(b, c)
 }
 
-func createFoo(foov1Client dynamic.ResourceInterface, b *testing.B) {
-	foo := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "stable.example.com/v1",
-			"kind":       "Foo",
-			"metadata": map[string]interface{}{
-				"name": fmt.Sprintf("foov1-%d", time.Now().Nanosecond()),
-			},
-		},
-	}
-	foov1Client.Create(foo, metav1.CreateOptions{})
+func BenchmarkListEndpointsDynamic(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkList(b, c)
 }
 
-func createBar(barv1Client dynamic.ResourceInterface, b *testing.B) {
-	bar := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "stable.example.com/v1",
-			"kind":       "Bar",
-			"metadata": map[string]interface{}{
-				"name": fmt.Sprintf("barv1-%d", time.Now().Nanosecond()),
-			},
-		},
-	}
-	barv1Client.Create(bar, metav1.CreateOptions{})
+func BenchmarkListCRWithConvert_WatchCache(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(foov1GVR, testNamespace, foov1Template, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c)
 }
 
-func createEndpoints(clientset *kubernetes.Clientset, b *testing.B) {
-	endpoints := &v1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("endpoints-%d", time.Now().Nanosecond()),
-		},
-	}
-	clientset.CoreV1().Endpoints("default").Create(endpoints)
+func BenchmarkListCR_WatchCache(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(barGVR, testNamespace, barTemplate, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c)
 }
 
-func dynamicCreateEndpoints(client dynamic.ResourceInterface, b *testing.B) {
-	endpoints := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Endpoints",
-			"metadata": map[string]interface{}{
-				"name": fmt.Sprintf("endpoints-%d", time.Now().Nanosecond()),
-			},
-		},
-	}
-	client.Create(endpoints, metav1.CreateOptions{})
+func BenchmarkListEndpointsTyped_WatchCache(b *testing.B) {
+	c := mustNewEndpointsBenchmarkClient(testNamespace, endpointsTemplate, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c)
+}
+
+func BenchmarkListEndpointsDynamic_WatchCache(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(endpointsGVR, testNamespace, endpointsTemplate, &metav1.ListOptions{ResourceVersion: "0"})
+	benchmarkList(b, c)
 }
