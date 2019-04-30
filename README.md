@@ -58,6 +58,12 @@ kubectl get foo foov1
 kubectl get foo.v1.stable.example.com foov1
 ```
 
+7. Create CRD without conversion
+
+```sh
+kubectl create -f artifacts/bar-crd.yaml
+```
+
 ## Benchmark testing
 
 ```sh

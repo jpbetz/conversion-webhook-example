@@ -36,3 +36,7 @@ kubectl create -f artifacts/foov2.yaml
 
 kubectl get foo foov1
 kubectl get foo.v1.stable.example.com foov1
+
+# 7. Create CRD without conversion
+
+kubectl create -f artifacts/bar-crd.yaml

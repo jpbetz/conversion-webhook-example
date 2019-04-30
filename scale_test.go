@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -17,7 +20,6 @@ var (
 	barGVR       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
 	endpointsGVR = schema.GroupVersionResource{Version: "v1", Resource: "endpoints"}
 
-	// TODO: make sure namespace exists in setup / test
 	emptyNamespace         = "empty"
 	largeDataNamespace     = "large-data"
 	largeMetadataNamespace = "large-metadata"
@@ -47,6 +49,30 @@ var endpointsTemplate = []byte(`apiVersion: v1
 kind: Endpoints
 metadata:
   name: template`)
+
+// TODO: TestMain actually runs after benchmarks, so this doesn't help yet
+func TestMain(m *testing.M) {
+	setupNamespace(emptyNamespace)
+	setupNamespace(largeDataNamespace)
+	setupNamespace(largeMetadataNamespace)
+	os.Exit(m.Run())
+}
+
+func setupNamespace(name string) {
+	c := mustNewClientset().CoreV1().Namespaces()
+	_, err := c.Get(name, metav1.GetOptions{})
+	if err == nil {
+		return
+	}
+	if errors.IsNotFound(err) {
+		if _, err := c.Create(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
+			panic(err)
+		}
+		// wait for namespace to be initialized
+		time.Sleep(5 * time.Second)
+	}
+	panic(err)
+}
 
 func benchmarkCreateLatency(b *testing.B, client BenchmarkClient) {
 	b.ResetTimer()
