@@ -33,22 +33,22 @@ hack/webhook-create-signed-cert.sh \
 
 ```sh
 cat artifacts/crd-template.yaml | hack/webhook-patch-ca-bundle.sh --secret webhook-tls-certs > artifacts/crd-with-webhook.yaml
-kubectl create -f artifacts/crd-with-webhook.yaml
+kubectl apply -f artifacts/crd-with-webhook.yaml
 ```
 
 4. Create a conversion webhook that uses the TLS certificate and key
 
 ```sh
-kubectl create -f artifacts/webhook-pod.yaml
-kubectl create -f artifacts/webhook-service.yaml
+kubectl apply -f artifacts/webhook-pod.yaml
+kubectl apply -f artifacts/webhook-service.yaml
 # Wait a few seconds for endpoints to be available for service
 ```
 
 5. Create custom resources at both supported versions for the CRD
 
 ```sh
-kubectl create -f artifacts/foov1.yaml
-kubectl create -f artifacts/foov2.yaml
+kubectl apply -f artifacts/foov1.yaml
+kubectl apply -f artifacts/foov2.yaml
 ```
 
 6. Read using both versions
@@ -61,7 +61,7 @@ kubectl get foo.v1.stable.example.com foov1
 7. Create CRD without conversion
 
 ```sh
-kubectl create -f artifacts/bar-crd.yaml
+kubectl apply -f artifacts/bar-crd.yaml
 ```
 
 8. Create test namespaces
