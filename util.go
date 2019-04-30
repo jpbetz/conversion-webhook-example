@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,15 +14,15 @@ import (
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"sigs.k8s.io/yaml"
 )
 
 // mustNewRESTConfig builds a rest client config
 func mustNewRESTConfig() *rest.Config {
-	// TODO: add flag / in-cluster config support
-	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	// TODO: add flag support in TestMain for running in master VM / remotely
+	// kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+	// config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	config, err := clientcmd.DefaultClientConfig.ClientConfig()
 	if err != nil {
 		panic(err)
 	}

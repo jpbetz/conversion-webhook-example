@@ -66,18 +66,26 @@ kubectl create -f artifacts/bar-crd.yaml
 
 ## Benchmark testing
 
+We suggest running the benchmarks on master VM to reduce the network noise.
+
 ```sh
+# Push test binary to GCE master VM
+make push_test
+
+# Move the binary to /run to execute it
+sudo mv /tmp/conversion-webhook-example.test /run
+
 # Run all benchmarks
-go test -bench=.
+/run/conversion-webhook-example.test -test.bench=.
 
 # Run benchmarks for create latency
-go test -bench=CreateLatency
+/run/conversion-webhook-example.test -test.bench=CreateLatency
 
 # Run benchmarks for create throughput
-go test -bench=CreateThroughput
+/run/conversion-webhook-example.test -test.bench=CreateThroughput
 
 # Run benchmarks for list
-go test -bench=List
+/run/conversion-webhook-example.test -test.bench=List
 ```
 
 ## References
