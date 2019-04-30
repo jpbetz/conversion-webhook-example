@@ -31,8 +31,8 @@ var (
 
 	// number of objects we will create and list in list benchmarks
 	emptyListSize         = 10000
-	largeDataListSize     = 500
-	largeMetadataListSize = 500
+	largeDataListSize     = 10000
+	largeMetadataListSize = 10000
 )
 
 var foov1Template = []byte(`apiVersion: stable.example.com/v1

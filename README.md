@@ -14,10 +14,10 @@ Run `setup.sh` will call the following steps and set up the cluster for you.
 
 ### Steps
 
-1. Create a GCE cluster (n1-standard-1) with CustomResourceWebhookConversion feature enabled
+1. Create a GCE cluster (n1-standard-4) with CustomResourceWebhookConversion feature enabled
 
 ```sh
-KUBE_FEATURE_GATES="ExperimentalCriticalPodAnnotation=true,CustomResourceWebhookConversion=true" KUBE_UP_AUTOMATIC_CLEANUP=true $GOPATH/src/k8s.io/kubernetes/cluster/kube-up.sh
+MASTER_SIZE=4 KUBE_FEATURE_GATES="ExperimentalCriticalPodAnnotation=true,CustomResourceWebhookConversion=true" KUBE_UP_AUTOMATIC_CLEANUP=true $GOPATH/src/k8s.io/kubernetes/cluster/kube-up.sh
 ```
 
 2. Create a secret containing a TLS key and certificate
@@ -64,12 +64,20 @@ kubectl get foo.v1.stable.example.com foov1
 kubectl create -f artifacts/bar-crd.yaml
 ```
 
+8. Create test namespaces
+
+```sh
+kubectl create ns empty
+kubectl create ns large-data
+kubectl create ns large-metadata
+```
+
 ## Benchmark testing
 
 We suggest running the benchmarks on master VM to reduce the network noise.
 
 ```sh
-# Push test binary to GCE master VM
+# Push test binary and kubeconfig to GCE master VM
 make push_test
 
 # Move the binary to /run to execute it
