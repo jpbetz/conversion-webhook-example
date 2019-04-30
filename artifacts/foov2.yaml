@@ -1,0 +1,4 @@
+apiVersion: stable.example.com/v2
+kind: Foo
+metadata:
+  name: foov2
