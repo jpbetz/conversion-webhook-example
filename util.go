@@ -157,15 +157,31 @@ func mustIncreaseObjectSize(data []byte, size int, fields ...string) []byte {
 	if err := yaml.Unmarshal(data, &u); err != nil {
 		panic(err)
 	}
-	dummy := map[string]string{}
-	for i := 0; i < size; i++ {
-		// TODO: double check wired format size
-		// 1000 bytes each in JSON (10+6+984=1000)
-		//     ,"<10 bytes>":"<984 bytes>"
-		dummy[fmt.Sprintf("%010d", i)] = strings.Repeat("x", 984)
-	}
-	if err := unstructured.SetNestedStringMap(u.Object, dummy, fields...); err != nil {
-		panic(err)
+	// NOTE: we are have a rough equivalence in size between annotation and CR array,
+	// because there is no good array candidate in metadata
+	if fields[0] == "metadata" {
+		dummy := map[string]string{}
+		for i := 0; i < size; i++ {
+			// TODO: double check wired format size
+			// 1000 bytes each in JSON (10+6+984=1000)
+			//     ,"<10 bytes>":"<984 bytes>"
+			dummy[fmt.Sprintf("%010d", i)] = strings.Repeat("x", 984)
+		}
+		if err := unstructured.SetNestedStringMap(u.Object, dummy, fields...); err != nil {
+			panic(err)
+		}
+	} else {
+		// TODO: unstructured doesn't support set (deep copy) nested struct
+		dummy := []string{}
+		for i := 0; i < size; i++ {
+			// TODO: double check wired format size
+			// 1000 bytes each in JSON (9+991=1000)
+			//     ,"dummy-<991 bytes>"
+			dummy = append(dummy, fmt.Sprintf("dummy-%0991d", i))
+		}
+		if err := unstructured.SetNestedStringSlice(u.Object, dummy, fields...); err != nil {
+			panic(err)
+		}
 	}
 	d, err := yaml.Marshal(&u)
 	if err != nil {

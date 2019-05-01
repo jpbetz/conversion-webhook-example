@@ -17,7 +17,7 @@ Run `setup.sh` will call the following steps and set up the cluster for you.
 1. Create a GCE cluster (n1-standard-4) with CustomResourceWebhookConversion feature enabled
 
 ```sh
-MASTER_SIZE=4 KUBE_FEATURE_GATES="ExperimentalCriticalPodAnnotation=true,CustomResourceWebhookConversion=true" KUBE_UP_AUTOMATIC_CLEANUP=true $GOPATH/src/k8s.io/kubernetes/cluster/kube-up.sh
+MASTER_SIZE=n1-standard-4 KUBE_FEATURE_GATES="ExperimentalCriticalPodAnnotation=true,CustomResourceWebhookConversion=true" KUBE_UP_AUTOMATIC_CLEANUP=true $GOPATH/src/k8s.io/kubernetes/cluster/kube-up.sh
 ```
 
 2. Create a secret containing a TLS key and certificate

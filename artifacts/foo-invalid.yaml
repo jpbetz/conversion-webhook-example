@@ -1,0 +1,11 @@
+apiVersion: stable.example.com/v1
+kind: Foo
+metadata:
+  name: foo-invalid
+spec:
+  dummy:
+    - dummy-0
+    - dummy-01
+    - dummy-1234
+    - a1000
+    - dummy-
