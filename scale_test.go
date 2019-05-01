@@ -330,3 +330,53 @@ func BenchmarkListEndpointsDynamic_LargeMetadata_WatchCache(b *testing.B) {
 	c := mustNewDynamicBenchmarkClient(endpointsGVR, largeMetadataNamespace, template, &metav1.ListOptions{ResourceVersion: "0"})
 	benchmarkList(b, c, largeMetadataListSize)
 }
+
+func benchmarkWatch(b *testing.B, client BenchmarkClient, listSize int) {
+	watcherCount := 1000
+	events := b.N
+	var readyWg sync.WaitGroup
+	var doneWg sync.WaitGroup
+	readyWg.Add(watcherCount)
+	doneWg.Add(watcherCount)
+	start := time.Now()
+	for i := 0; i < watcherCount; i++ {
+		go func() {
+			watcher, err := client.Watch()
+			if err != nil {
+				b.Fatalf("failed to watch: %v", err)
+			}
+			readyWg.Done()
+			for j := 0; j < events; j++ {
+				<-watcher.ResultChan()
+			}
+			watcher.Stop()
+			doneWg.Done()
+		}()
+	}
+	readyWg.Wait()
+	fmt.Printf("created %d watches in %v\n", watcherCount, time.Now().Sub(start))
+	start = time.Now()
+	b.ResetTimer()
+	for i := 0; i < events; i++ {
+		go func() {
+			client.Create(i)
+		}()
+	}
+	doneWg.Wait()
+	fmt.Printf("processed %d watch events in %v\n", watcherCount*events, time.Now().Sub(start))
+}
+
+func BenchmarkWatchCRWithConvert(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(foov1GVR, emptyNamespace, foov1Template, &metav1.ListOptions{})
+	benchmarkWatch(b, c, emptyListSize)
+}
+
+func BenchmarkWatchCR(b *testing.B) {
+	c := mustNewDynamicBenchmarkClient(barGVR, emptyNamespace, barTemplate, &metav1.ListOptions{})
+	benchmarkWatch(b, c, emptyListSize)
+}
+
+func BenchmarkWatchEndpointsTyped(b *testing.B) {
+	c := mustNewEndpointsBenchmarkClient(emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
+	benchmarkWatch(b, c, emptyListSize)
+}

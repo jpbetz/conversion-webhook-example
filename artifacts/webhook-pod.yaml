@@ -8,7 +8,7 @@ spec:
   containers:
   - name: converter
     image: "gcr.io/kubernetes-e2e-test-images/crd-conversion-webhook:1.14rev4"
-    args: ["--tls-cert-file=/var/certs/cert.pem", "--tls-private-key-file=/var/certs/key.pem", "--alsologtostderr", "-v=4", "2>&1"]
+    args: ["--tls-cert-file=/var/certs/cert.pem", "--tls-private-key-file=/var/certs/key.pem", "--alsologtostderr", "-v=1", "2>&1"]
     ports:
       - containerPort: 9443
     volumeMounts:

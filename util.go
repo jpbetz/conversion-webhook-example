@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -59,6 +60,7 @@ type BenchmarkClient interface {
 	Create(i int) (interface{}, error)
 	List() (interface{}, error)
 	Count() (int, error)
+	Watch() (watch.Interface, error)
 }
 
 var _ BenchmarkClient = &dynamicBenchmarkClient{}
@@ -89,6 +91,10 @@ func (c *dynamicBenchmarkClient) Count() (int, error) {
 	return len(l.Items), nil
 }
 
+func (c *dynamicBenchmarkClient) Watch() (watch.Interface, error) {
+	return c.client.Watch(*c.listOptions)
+}
+
 // endpointsBenchmarkClient implements BenchmarkClient interface
 type endpointsBenchmarkClient struct {
 	client      clientv1.EndpointsInterface
@@ -113,6 +119,10 @@ func (c *endpointsBenchmarkClient) Count() (int, error) {
 		return 0, err
 	}
 	return len(l.Items), nil
+}
+
+func (c *endpointsBenchmarkClient) Watch() (watch.Interface, error) {
+	return c.client.Watch(*c.listOptions)
 }
 
 func mustNewDynamicBenchmarkClient(gvr schema.GroupVersionResource, namespace string,
