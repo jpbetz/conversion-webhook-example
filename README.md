@@ -84,16 +84,16 @@ make push_test
 sudo mv /tmp/conversion-webhook-example.test /run
 
 # Run all benchmarks
-/run/conversion-webhook-example.test -test.bench=.
+/run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=.
 
 # Run benchmarks for create latency
-/run/conversion-webhook-example.test -test.bench=CreateLatency
+/run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=CreateLatency
 
 # Run benchmarks for create throughput
-/run/conversion-webhook-example.test -test.bench=CreateThroughput
+/run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=CreateThroughput
 
 # Run benchmarks for list
-/run/conversion-webhook-example.test -test.bench=List
+/run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=List
 ```
 
 ## References
