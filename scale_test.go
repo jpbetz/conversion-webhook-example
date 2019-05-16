@@ -332,10 +332,10 @@ func Benchmark_CreateThroughput_Endpoints_Dynamic(b *testing.B) {
 	runBenchmark(b)
 }
 
-func benchmarkList(b *testing.B, client BenchmarkClient, listSize int) {
+func ensureObjectCount(client BenchmarkClient, listSize int) error {
 	num, err := client.Count()
 	if err != nil {
-		b.Fatalf("failed to check list size: %v", err)
+		return fmt.Errorf("failed to check list size: %v", err)
 	}
 	if num < listSize {
 		var wg sync.WaitGroup
@@ -356,7 +356,14 @@ func benchmarkList(b *testing.B, client BenchmarkClient, listSize int) {
 		}
 		wg.Wait()
 	} else if num > listSize {
-		b.Fatalf("Too many items already exist. Want %d got %d", listSize, num)
+		return fmt.Errorf("Too many items already exist. Want %d got %d", listSize, num)
+	}
+	return nil
+}
+
+func benchmarkList(b *testing.B, client BenchmarkClient, listSize int) {
+	if err := ensureObjectCount(client, listSize); err != nil {
+		b.Fatal(err)
 	}
 
 	b.ResetTimer()
