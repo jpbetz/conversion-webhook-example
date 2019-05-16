@@ -533,15 +533,15 @@ func benchmarkWatch(b *testing.B, client BenchmarkClient, listSize int) {
 
 func BenchmarkWatchCRWithConvert(b *testing.B) {
 	c := mustNewDynamicBenchmarkClient(foov1GVR, emptyNamespace, foov1Template, &metav1.ListOptions{})
-	benchmarkWatch(b, c, emptyListSize)
+	benchmarkWatch(b, c, testListSize)
 }
 
 func BenchmarkWatchCR(b *testing.B) {
 	c := mustNewDynamicBenchmarkClient(barGVR, emptyNamespace, barTemplate, &metav1.ListOptions{})
-	benchmarkWatch(b, c, emptyListSize)
+	benchmarkWatch(b, c, testListSize)
 }
 
 func BenchmarkWatchEndpointsTyped(b *testing.B) {
 	c := mustNewEndpointsBenchmarkClient(emptyNamespace, endpointsTemplate, &metav1.ListOptions{})
-	benchmarkWatch(b, c, emptyListSize)
+	benchmarkWatch(b, c, testListSize)
 }
