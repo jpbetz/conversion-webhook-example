@@ -4,9 +4,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	clientv1beta1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -19,6 +25,63 @@ import (
 	"k8s.io/client-go/util/homedir"
 	"sigs.k8s.io/yaml"
 )
+
+var (
+	// GVR used for building dynamic client
+	foov1GVR     = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "foos"}
+	foov2GVR     = schema.GroupVersionResource{Group: "stable.example.com", Version: "v2", Resource: "foos"}
+	barGVR       = schema.GroupVersionResource{Group: "stable.example.com", Version: "v1", Resource: "bars"}
+	endpointsGVR = schema.GroupVersionResource{Version: "v1", Resource: "endpoints"}
+	notfoundGVR  = schema.GroupVersionResource{Version: "error", Resource: "notfound"}
+
+	emptyNamespace         = "empty"
+	largeDataNamespace     = "large-data"
+	largeMetadataNamespace = "large-metadata"
+
+	fooName = "foos.stable.example.com"
+	barName = "bars.stable.example.com"
+
+	// size in kB
+	largeDataSize = 10
+	dummyFields   = []string{"spec", "dummy"}
+	metaFields    = []string{"metadata", "annotations"}
+
+	// number of objects we will create and list in list benchmarks
+	testListSize = 10000
+)
+
+var foov1Template = []byte(`apiVersion: stable.example.com/v1
+kind: Foo
+metadata:
+  name: template`)
+
+var barTemplate = []byte(`apiVersion: stable.example.com/v1
+kind: Bar
+metadata:
+  name: template`)
+
+var endpointsTemplate = []byte(`apiVersion: v1
+kind: Endpoints
+metadata:
+  name: template`)
+
+var validationSchema = []byte(`openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      properties:
+        dummy:
+          description: Dummy array.
+          type: array
+          items:
+            type: string
+            pattern: dummy-[0-9]+
+    status:
+      type: object
+      properties:
+        baz:
+          description: Optional Baz.`)
 
 // mustNewRESTConfig builds a rest client config
 func mustNewRESTConfig() *rest.Config {
@@ -188,4 +251,133 @@ func mustIncreaseObjectSize(data []byte, size int, fields ...string) []byte {
 		panic(err)
 	}
 	return d
+}
+
+func getGVR(name string) schema.GroupVersionResource {
+	if strings.Contains(name, "CRWithConvert") {
+		return foov1GVR
+	}
+	if strings.Contains(name, "CR") {
+		return barGVR
+	}
+	if strings.Contains(name, "Endpoints") && strings.Contains(name, "Dynamic") {
+		return endpointsGVR
+	}
+	return notfoundGVR
+}
+
+func getNamespace(name string) string {
+	if strings.Contains(name, "LargeData") {
+		return largeDataNamespace
+	}
+	if strings.Contains(name, "LargeMetadata") {
+		return largeMetadataNamespace
+	}
+	return emptyNamespace
+}
+
+func getTemplate(name string) []byte {
+	var template []byte
+	if strings.Contains(name, "CRWithConvert") {
+		template = foov1Template
+	} else if strings.Contains(name, "CR") {
+		template = barTemplate
+	} else {
+		template = endpointsTemplate
+	}
+
+	if strings.Contains(name, "LargeData") {
+		template = mustIncreaseObjectSize(template, largeDataSize, dummyFields...)
+	} else if strings.Contains(name, "LargeMetadata") {
+		template = mustIncreaseObjectSize(template, largeDataSize, metaFields...)
+	}
+	return template
+}
+
+func getListOptions(name string) *metav1.ListOptions {
+	if strings.Contains(name, "WatchCache") {
+		return &metav1.ListOptions{ResourceVersion: "0"}
+	}
+	return &metav1.ListOptions{}
+}
+
+func setupNamespace(name string) {
+	c := mustNewClientset().CoreV1().Namespaces()
+	_, err := c.Get(name, metav1.GetOptions{})
+	if err == nil {
+		return
+	}
+	if errors.IsNotFound(err) {
+		if _, err := c.Create(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
+			panic(err)
+		}
+		// wait for namespace to be initialized
+		time.Sleep(10 * time.Second)
+	}
+	panic(err)
+}
+
+func setupValidation(enable bool) {
+	clientset, err := apiextensionsclientset.NewForConfig(mustNewRESTConfig())
+	if err != nil {
+		panic(err)
+	}
+	client := clientset.ApiextensionsV1beta1().CustomResourceDefinitions()
+	if enable {
+		v := v1beta1.CustomResourceValidation{}
+		if err := yaml.Unmarshal(validationSchema, &v); err != nil {
+			panic(err)
+		}
+		mustHaveValidation(client, fooName, &v)
+		mustHaveValidation(client, barName, &v)
+	} else {
+		mustHaveValidation(client, fooName, nil)
+		mustHaveValidation(client, barName, nil)
+	}
+}
+
+// mustHaveValidation makes sure given CRD has expected validation set / unset
+func mustHaveValidation(client clientv1beta1.CustomResourceDefinitionInterface, name string, validation *v1beta1.CustomResourceValidation) {
+	crd, err := client.Get(name, metav1.GetOptions{})
+	if err != nil {
+		panic(err)
+	}
+	if apiequality.Semantic.DeepEqual(validation, crd.Spec.Validation) {
+		return
+	}
+	crd.Spec.Validation = validation
+	if _, err := client.Update(crd); err != nil {
+		panic(err)
+	}
+	// wait for potential initialization
+	time.Sleep(5 * time.Second)
+}
+
+func ensureObjectCount(client BenchmarkClient, listSize int) error {
+	num, err := client.Count()
+	if err != nil {
+		return fmt.Errorf("failed to check list size: %v", err)
+	}
+	if num < listSize {
+		var wg sync.WaitGroup
+		remaining := listSize - num
+		wg.Add(remaining)
+		for i := 0; i < remaining; i++ {
+			// deep copy i
+			idx := i
+			go func() {
+				_, err := client.Create(idx)
+				if err != nil {
+					// TODO: b.Fatal doesn't raise
+					// b.Fatalf("failed to create object: %v", err)
+					panic(err)
+				}
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+	} else if num > listSize {
+		return fmt.Errorf("Too many items already exist. Want %d got %d", listSize, num)
+	}
+	return nil
 }

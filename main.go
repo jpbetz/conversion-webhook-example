@@ -44,9 +44,9 @@ func main() {
 
 		// TODO: error on unsupported case
 		if strings.Contains(caller, "CreateLatency") {
-			_, err = client.Create(0)
+			_, err = c.Create(0)
 		} else if strings.Contains(caller, "List") {
-			_, err = client.List()
+			_, err = c.List()
 		}
 		if err != nil {
 			panic(err)
