@@ -29,6 +29,13 @@ func main() {
 		c = mustNewDynamicBenchmarkClient(getGVR(caller), getNamespace(caller), getTemplate(caller), getListOptions(caller))
 	}
 
+	// always delete all objects created by current run, to avoid overwhelm etcd over time
+	defer func() {
+		if err := c.DeleteCollection(); err != nil {
+			panic(fmt.Errorf("failed to clean up objects: %v", err))
+		}
+	}()
+
 	if strings.Contains(caller, "List") {
 		if err := ensureObjectCount(c, testListSize); err != nil {
 			panic(err)

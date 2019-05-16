@@ -5,7 +5,7 @@
 
 # 1. Create a GCE cluster with CustomResourceWebhookConversion feature enabled
 
-MASTER_SIZE=n1-standard-4 KUBE_FEATURE_GATES="ExperimentalCriticalPodAnnotation=true,CustomResourceWebhookConversion=true" KUBE_UP_AUTOMATIC_CLEANUP=true $GOPATH/src/k8s.io/kubernetes/cluster/kube-up.sh
+MASTER_SIZE=n1-standard-8 KUBE_FEATURE_GATES="ExperimentalCriticalPodAnnotation=true,CustomResourceWebhookConversion=true" KUBE_UP_AUTOMATIC_CLEANUP=true $GOPATH/src/k8s.io/kubernetes/cluster/kube-up.sh
 
 # 2. Create a secret containing a TLS key and certificate
 

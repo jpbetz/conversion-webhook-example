@@ -124,6 +124,7 @@ type BenchmarkClient interface {
 	List() (interface{}, error)
 	Count() (int, error)
 	Watch() (watch.Interface, error)
+	DeleteCollection() error
 }
 
 var _ BenchmarkClient = &dynamicBenchmarkClient{}
@@ -158,6 +159,10 @@ func (c *dynamicBenchmarkClient) Watch() (watch.Interface, error) {
 	return c.client.Watch(*c.listOptions)
 }
 
+func (c *dynamicBenchmarkClient) DeleteCollection() error {
+	return c.client.DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+}
+
 // endpointsBenchmarkClient implements BenchmarkClient interface
 type endpointsBenchmarkClient struct {
 	client      clientv1.EndpointsInterface
@@ -186,6 +191,10 @@ func (c *endpointsBenchmarkClient) Count() (int, error) {
 
 func (c *endpointsBenchmarkClient) Watch() (watch.Interface, error) {
 	return c.client.Watch(*c.listOptions)
+}
+
+func (c *endpointsBenchmarkClient) DeleteCollection() error {
+	return c.client.DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 func mustNewDynamicBenchmarkClient(gvr schema.GroupVersionResource, namespace string,
