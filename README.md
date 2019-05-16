@@ -80,20 +80,21 @@ We suggest running the benchmarks on master VM to reduce the network noise.
 # Push test binary and kubeconfig to GCE master VM
 make push_test
 
-# Move the binary to /run to execute it
+# Move kubeconfig and binaries around
+mkdir -p ~/.kube && mv /tmp/kubeconfig ~/.kube/config
 sudo mv /tmp/conversion-webhook-example.test /run
+sudo mv /tmp/conversion-webhook-example /run
+sudo mv /tmp/run-tachymeter.sh /run
 
-# Run all benchmarks
+# Run benchmarks
 /run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=.
-
-# Run benchmarks for create latency
 /run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=CreateLatency
-
-# Run benchmarks for create throughput
 /run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=CreateThroughput
-
-# Run benchmarks for list
 /run/conversion-webhook-example.test -test.benchtime=100x -test.cpu 1 -test.bench=List
+
+# Run tachymeter tests
+/run/conversion-webhook-example --name="Benchmark_CreateLatency_CR"
+/tmp/run-tachymeter.sh
 ```
 
 ## References
