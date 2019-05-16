@@ -15,6 +15,7 @@ func main() {
 	window := flag.Int("window", 50, "TODO: documentation")
 	flag.Parse()
 	caller := *name
+	fmt.Println(caller)
 
 	// set up env
 	setupNamespace(emptyNamespace)
@@ -34,12 +35,14 @@ func main() {
 		if err := c.DeleteCollection(); err != nil {
 			panic(fmt.Errorf("failed to clean up objects: %v", err))
 		}
+		fmt.Println("objects cleaned up")
 	}()
 
 	if strings.Contains(caller, "List") {
 		if err := ensureObjectCount(c, testListSize); err != nil {
 			panic(err)
 		}
+		fmt.Println("enough objects prepared")
 	}
 
 	// actual measurement
