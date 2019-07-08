@@ -24,3 +24,17 @@ spec:
     kind: Foo
     plural: foos
   scope: Namespaced
+  preserveUnknownFields: false
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+        host:
+          type: string
+        port:
+          type: string
+        hostPort:
+          type: string
+      type: object
