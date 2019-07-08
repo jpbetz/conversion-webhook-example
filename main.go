@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jamiealquiza/tachymeter"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 func main() {
@@ -32,8 +33,12 @@ func main() {
 
 	// always delete all objects created by current run, to avoid overwhelm etcd over time
 	defer func() {
+		start := time.Now()
 		if err := c.DeleteCollection(); err != nil {
-			panic(fmt.Errorf("failed to clean up objects: %v", err))
+			if v, ok := err.(*errors.StatusError); ok {
+				panic(fmt.Errorf(v.DebugError()))
+			}
+			panic(fmt.Errorf("failed to clean up objects: %v; time elapsed: %v", err, time.Since(start)))
 		}
 		fmt.Println("objects cleaned up")
 	}()

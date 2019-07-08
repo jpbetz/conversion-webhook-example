@@ -92,6 +92,8 @@ func mustNewRESTConfig() *rest.Config {
 	if err != nil {
 		panic(err)
 	}
+	// wait for long running requests, e.g. deleting 10k objects
+	config.Timeout = 10 * time.Minute
 
 	// increase QPS (default 5) for heavy load testing
 	config.QPS = 10000

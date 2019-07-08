@@ -2,3 +2,4 @@ artifacts/kubeconfig.yaml
 crd-with-webhook.yaml
 conversion-webhook-example.test
 conversion-webhook-example
+logs
