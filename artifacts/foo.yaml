@@ -1,0 +1,5 @@
+apiVersion: stable.example.com/v1
+kind: Foo
+metadata:
+  name: foo-port
+hostPort: "localhost:7070"

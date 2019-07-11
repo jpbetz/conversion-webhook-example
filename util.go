@@ -68,6 +68,12 @@ metadata:
 var validationSchema = []byte(`openAPIV3Schema:
   type: object
   properties:
+    host:
+      type: string
+    port:
+      type: string
+    hostPort:
+      type: string
     spec:
       type: object
       properties:
@@ -81,6 +87,7 @@ var validationSchema = []byte(`openAPIV3Schema:
       type: object
       properties:
         baz:
+          type: object
           description: Optional Baz.`)
 
 // mustNewRESTConfig builds a rest client config
