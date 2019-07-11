@@ -42,12 +42,12 @@ var (
 	barName = "bars.stable.example.com"
 
 	// size in kB
-	largeDataSize = 10
+	largeDataSize = 50
 	dummyFields   = []string{"spec", "dummy"}
 	metaFields    = []string{"metadata", "annotations"}
 
 	// number of objects we will create and list in list benchmarks
-	testListSize = 10000
+	testListSize = 1000
 )
 
 var foov1Template = []byte(`apiVersion: stable.example.com/v1
@@ -331,8 +331,9 @@ func setupNamespace(name string) {
 		}
 		// wait for namespace to be initialized
 		time.Sleep(10 * time.Second)
+	} else {
+		panic(err)
 	}
-	panic(err)
 }
 
 func setupValidation(enable bool) {
